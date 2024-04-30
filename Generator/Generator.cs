@@ -3,7 +3,6 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Linq;
 using System.Threading;
 
@@ -22,45 +21,41 @@ namespace Generator
 					TriggerAttribute,
 					(node, _) => node is ClassDeclarationSyntax,
 					Transform)
-				.WithComparer(TransformedComparer.Instance)
-				.Collect();
+				.WithComparer(TransformedComparer.Instance);
 			initContext.RegisterSourceOutput(valueProvider, Generate);
 		}
 
-		private void Generate(SourceProductionContext sourceContext, ImmutableArray<Transformed> inputs)
+		private void Generate(SourceProductionContext sourceContext, GeneratorInput input)
 		{
-			foreach(var input in inputs)
-			{
-				sourceContext.AddSource($"{input.Name}.g.cs", $"// Generated at {DateTime.Now}. [Changed: {input.Changed}]");
-			}
+			sourceContext.AddSource($"{input.Name}.g.cs", $"// Generated at {DateTime.Now}. [Changed: {input.Changed}]");
 		}
 
-		private Transformed Transform(GeneratorAttributeSyntaxContext syntaxContext, CancellationToken _)
+		private GeneratorInput Transform(GeneratorAttributeSyntaxContext syntaxContext, CancellationToken _)
 		{
 			var symbol = syntaxContext.TargetSymbol as INamedTypeSymbol;
 			var texts = symbol.DeclaringSyntaxReferences.Select(o => o.GetSyntax().GetText());
-			return new Transformed() { Name = symbol.Name, SourceTexts = texts };
+			return new GeneratorInput() { Name = symbol.Name, SourceTexts = texts };
 		}
 
-		private class Transformed
+		private class GeneratorInput
 		{
 			internal string Name { get; set; }
 			internal IEnumerable<SourceText> SourceTexts { get; set; }
 			internal bool Changed { get; set; }
 		}
 
-		private class TransformedComparer : IEqualityComparer<Transformed>
+		private class TransformedComparer : IEqualityComparer<GeneratorInput>
 		{
 			internal static readonly TransformedComparer Instance = new();
 
-			public bool Equals(Transformed x, Transformed y)
+			public bool Equals(GeneratorInput x, GeneratorInput y)
 			{
 				var equal = Enumerable.SequenceEqual(x.SourceTexts, y.SourceTexts, SourceTextComparer.Instance);
 				y.Changed = !equal;
 				return equal;
 			}				
 
-			public int GetHashCode(Transformed obj) => 1;
+			public int GetHashCode(GeneratorInput obj) => 1;
 		}
 
 		private class SourceTextComparer : IEqualityComparer<SourceText>
