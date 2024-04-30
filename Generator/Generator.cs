@@ -22,7 +22,29 @@ namespace Generator
 					TriggerAttribute,
 					(node, _) => node is ClassDeclarationSyntax,
 					Transform)
+
+				// The comparer sets Compared and Changed on
+				// the transformed values when it compares them.
+				// Putting WithComparer after Where seemed to
+				// make no difference.
 				.WithComparer(TransformedComparer.Instance)
+
+				// Where #1: Nothing is generated because
+				// this Where excludes everything. This makes
+				// sense. Nothing is compared on the first
+				// run, so the comparer never sets Changed. 
+				//.Where(o => o.Changed)
+
+				// Where #2: Add a condition to pass values
+				// that have not been compared. As expected,
+				// this passes both values on the first run
+				// because Compared = false.
+				.Where(o => !o.Compared || o.Changed)
+
+				// On subsequent runs, Collect includes
+				// values that DO NOT pass the Where; i.e.,
+				// values with Compared = true, Changed = false.
+				// Why doesn't it do this on the first run?
 				.Collect();
 			initContext.RegisterSourceOutput(valueProvider, Generate);
 		}
@@ -31,7 +53,7 @@ namespace Generator
 		{
 			foreach(var input in inputs)
 			{
-				sourceContext.AddSource($"{input.Name}.g.cs", $"// Generated at {DateTime.Now}. [Changed: {input.Changed}]");
+				sourceContext.AddSource($"{input.Name}.g.cs", $"// Generated at {DateTime.Now}. [Compared: {input.Compared}, Changed: {input.Changed}]");
 			}
 		}
 
@@ -46,6 +68,7 @@ namespace Generator
 		{
 			internal string Name { get; set; }
 			internal IEnumerable<SourceText> SourceTexts { get; set; }
+			internal bool Compared { get; set; }
 			internal bool Changed { get; set; }
 		}
 
@@ -56,7 +79,8 @@ namespace Generator
 			public bool Equals(Transformed x, Transformed y)
 			{
 				var equal = Enumerable.SequenceEqual(x.SourceTexts, y.SourceTexts, SourceTextComparer.Instance);
-				y.Changed = !equal;
+				x.Compared = y.Compared = true;
+				x.Changed = y.Changed = !equal;
 				return equal;
 			}				
 
